@@ -1,0 +1,120 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:email="http://www.mulesoft.org/schema/mule/email" xmlns:db="http://www.mulesoft.org/schema/mule/db"
+	xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+	xmlns:batch="http://www.mulesoft.org/schema/mule/batch" xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns:api-gateway="http://www.mulesoft.org/schema/mule/api-gateway" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/api-gateway http://www.mulesoft.org/schema/mule/api-gateway/current/mule-api-gateway.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/batch http://www.mulesoft.org/schema/mule/batch/current/mule-batch.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd
+http://www.mulesoft.org/schema/mule/email http://www.mulesoft.org/schema/mule/email/current/mule-email.xsd">
+	<db:config name="Database_Config" doc:name="Database Config" doc:id="e76c4ca0-82e0-4e2f-9756-bca84ee4cd2d" >
+		<db:my-sql-connection host="${db.host}" port="${db.port}" user="${db.username}" password="${db.password}" database="${db.database}" />
+	</db:config>
+	<email:smtp-config name="Email_SMTP" doc:name="Email SMTP" doc:id="74e485cf-216a-4735-8d9d-936fe69cd6b1" >
+		<email:smtp-connection host="smtp.gmail.com" port="587" user="swapna.poojar@apisero.com" password="T$wapna25">
+			<email:properties >
+				<email:property key="mail.smtp.starttls.enable" value="true" />
+			</email:properties>
+		</email:smtp-connection>
+	</email:smtp-config>
+	<sub-flow name="getting_empdata_Flow" doc:id="12a884ba-a95a-4063-8495-cce7e0852958" >
+		<db:select doc:name="Select" doc:id="3f4c4aed-7e4d-434c-8df0-30c168159625" config-ref="Database_Config">
+						<db:sql>SELECT *  FROM empdata;</db:sql>
+					</db:select>
+		<ee:transform doc:name="Transform Message" doc:id="2e6fd1ff-8217-4558-b4ad-b7813ddc218a">
+						<ee:message>
+							<ee:set-payload><![CDATA[%dw 2.0
+output application/java
+---
+payload]]></ee:set-payload>
+						</ee:message>
+					</ee:transform>
+	</sub-flow>
+	<flow name="empdata_policyFlow" doc:id="873437df-4b50-4950-9db3-f903066f894f" >
+		<batch:job jobName="empdata_policyBatch_Job" doc:id="b4a3dd2f-ebaf-4188-bba9-af1ee2ca966a" >
+			<batch:process-records >
+				<batch:step name="Batch_Step" doc:id="0f6638cd-8191-4a8e-95dd-718b507c52d7" >
+					<ee:transform doc:name="Transform Message" doc:id="652f3ec0-fd94-48ab-94a8-9528ee0f50c1" >
+						<ee:message >
+							<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-payload>
+						</ee:message>
+					</ee:transform>
+					<flow-ref doc:name="Flow Reference" doc:id="b8858817-688f-448b-b049-03872c188799" name="getting_empdata_Flow"/>
+				</batch:step>
+			</batch:process-records>
+			<batch:on-complete >
+				<email:send doc:name="Send" doc:id="a8835966-7ea4-4ce9-ab66-782b72ebe61e" config-ref="Email_SMTP" toAddresses="swapna.poojar@apisero.com" fromAddress="swapna.poojar@apisero.com" subject="employeedata">
+					<email:body contentType="text/csv" />
+				</email:send>
+			</batch:on-complete>
+		</batch:job>
+	</flow>
+	<sub-flow name="getting_id_empdata_Flow" doc:id="c89e9145-42d2-4b96-8c4e-f92eba565a6c" >
+		<db:select doc:name="Select" doc:id="fbc2e19e-8cd6-4c73-93bd-be9646bdb759" config-ref="Database_Config">
+			<db:sql >SELECT * FROM empdata;</db:sql>
+		</db:select>
+		<ee:transform doc:name="Transform Message" doc:id="4df9f56e-2a75-443b-b628-22e1c522f0d8" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+	</sub-flow>
+	<sub-flow name="creating_empdata_Flow" doc:id="ddf26cfe-5f50-49f1-a02c-c3c0b16cfb19" >
+		<db:insert doc:name="Insert" doc:id="ff6be0b4-66ee-4a2e-9365-d6afc4b3a819" config-ref="Database_Config">
+			<db:sql >INSERT INTO empdata (id,employee_name,employee_salary,employee_age,profile_image) 
+VALUES(:id,:employee_name,:employee_salary,:employee_age,:profile_image);</db:sql>
+			<db:input-parameters ><![CDATA[#[{
+	id: payload.id,
+	employee_name: payload.employee_name,
+	employee_salary: payload.employee_salary,
+	employee_age: payload.employee_age,
+	profile_image: payload.profile_image
+	}]]]></db:input-parameters>
+		</db:insert>
+		<ee:transform doc:name="Transform Message" doc:id="6f27fbad-cf50-4e63-bcc7-089e73dd3adb" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+	</sub-flow>
+	<sub-flow name="updating_empdata_Flow" doc:id="be7e3d18-c799-48b1-9cc0-86e9ce51623d" >
+		<db:update doc:name="Update" doc:id="b0c7a8a2-8023-49ed-b723-2f8d875717ae" config-ref="Database_Config">
+			<db:sql >UPDATE  empdata SET id=&quot;101&quot;
+WHERE id=&quot;1&quot;;
+</db:sql>
+		</db:update>
+		<ee:transform doc:name="Transform Message" doc:id="d6d27b91-93fe-407c-9968-40e54af78d43" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+	</sub-flow>
+	<sub-flow name="deleting_empdata_Flow" doc:id="648a664f-d0ee-4a04-af1a-30a6ce8d86b6" >
+		<db:delete doc:name="Delete" doc:id="1058d5d5-5c17-47c1-a314-fbba9638f6bd" config-ref="Database_Config">
+			<db:sql >DELETE FROM empdata
+WHERE id=&quot;101&quot;;</db:sql>
+		</db:delete>
+		<ee:transform doc:name="Transform Message" doc:id="e60b0c02-8a21-4b7b-9986-322c3a06a9b9" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+	</sub-flow>
+</mule>

@@ -1,0 +1,6 @@
+db:
+ username : "pswapna"
+ password: "S@ppu7411"
+ database : "demo_pi"
+ host: "db4free.net"
+ port : "3306"
